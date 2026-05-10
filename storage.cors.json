@@ -1,0 +1,9 @@
+﻿[
+  {
+    "origin": ["http://localhost:5173", "https://helper-495902.firebaseapp.com", "https://helper-495902.web.app"],
+    "method": ["GET", "POST", "PUT"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Authorization"]
+  }
+]
+

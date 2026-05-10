@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    function isMatchParticipant(matchId) {
+      let m = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return isSignedIn() && (
+        m.helperId == request.auth.uid ||
+        m.needyId  == request.auth.uid ||
+        m.driverId == request.auth.uid
+      );
+    }
+
+    function isHelperOrNeedy(matchId) {
+      let m = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return isSignedIn() && (
+        m.helperId == request.auth.uid || m.needyId == request.auth.uid
+      );
+    }
+
+    function isHelperOrDriver(matchId) {
+      let m = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return isSignedIn() && (
+        m.helperId == request.auth.uid || m.driverId == request.auth.uid
+      );
+    }
+
+    function isNeedyOrDriver(matchId) {
+      let m = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return isSignedIn() && (
+        m.needyId == request.auth.uid || m.driverId == request.auth.uid
+      );
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid);
+    }
+
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+                            && resource.data.authorId == request.auth.uid;
+    }
+
+    match /matches/{matchId} {
+      allow read: if isSignedIn() && (
+        resource.data.helperId == request.auth.uid ||
+        resource.data.needyId  == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.status   == "pending_driver"
+      );
+      allow write: if false;
+
+      function canSend(text) {
+        return request.resource.data.senderId == request.auth.uid
+            && text is string
+            && text.size() > 0;
+      }
+
+      // All 3 participants
+      match /chat_group/{msgId} {
+        allow read:   if isMatchParticipant(matchId);
+        allow create: if isMatchParticipant(matchId)
+                      && canSend(request.resource.data.text);
+      }
+
+      // Helper ↔ Needy only
+      match /chat_helper_needy/{msgId} {
+        allow read:   if isHelperOrNeedy(matchId);
+        allow create: if isHelperOrNeedy(matchId) && canSend(request.resource.data.text);
+      }
+
+      // Helper ↔ Driver only
+      match /chat_helper_driver/{msgId} {
+        allow read:   if isHelperOrDriver(matchId);
+        allow create: if isHelperOrDriver(matchId) && canSend(request.resource.data.text);
+      }
+
+      // Needy ↔ Driver only
+      match /chat_needy_driver/{msgId} {
+        allow read:   if isNeedyOrDriver(matchId);
+        allow create: if isNeedyOrDriver(matchId) && canSend(request.resource.data.text);
+      }
+    }
+  }
+}
