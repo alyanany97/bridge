@@ -1,140 +1,65 @@
 # Bridge
 
-A peer-to-peer mutual aid app built for a hackathon. People post what they have (food, clothing) or what they need, helpers claim items, and volunteer drivers handle the last-mile delivery. There's also a group chat and private chats between each pair so nobody has to share phone numbers.
+**Live: https://helper-495902.web.app**
 
-**Live:** https://helper-495902.web.app
+Bridge connects people who have surplus food and clothing with people in their community who need it — and gets it there through volunteer drivers. No middleman, no waiting list, no bureaucracy.
 
 ---
 
-## How it works
+## The Problem
 
-Three roles:
+Food banks and donation centres have friction on both sides. People with surplus don't bother because drop-off is inconvenient. People in need don't go because it's far, or embarrassing, or the hours don't work. The result is a lot of waste sitting next to a lot of need, with nothing connecting them.
 
-- **Needy** — post a request for food or clothing, or browse offers and claim what you need
-- **Helper** — post surplus items you want to give away, or accept someone's request
-- **Driver** — pick up available deliveries and drop them off
+Bridge makes posting a surplus bag of groceries as easy as taking a photo, and requesting help as easy as tapping a category.
 
-A photo of your stuff gets run through Gemini Vision to auto-fill the item list so you don't have to type everything out manually.
+---
+
+## How It Works
+
+Three roles, one flow:
+
+**Helper** — you have stuff to give. Take a photo, Bridge scans it with Gemini Vision and auto-fills the item list. Post it. Done.
+
+**Person in need** — browse nearby offers or post what you're looking for. Claim items from an offer, or wait for a helper to match your request.
+
+**Driver** — pick up available deliveries from the app and drop them off. No signing up, no scheduling. Just open the app and accept a job.
+
+Once a match is made between a helper and someone in need, the app arranges a driver, tracks the delivery in real time with a countdown timer, and opens a chat between all three parties so they can coordinate without sharing phone numbers.
+
+---
+
+## AI
+
+The main AI feature is **Gemini Vision photo intake**. Instead of manually listing items, helpers photograph whatever they're donating — a shelf, a bag, a box — and Gemini returns a structured list: item names, quantities, sizes where relevant. That list gets attached to the post and shown to potential recipients before they claim anything.
+
+This was the biggest UX unlock. Typing out "3x canned tomatoes, 1x pasta, 2x cereal" is the kind of friction that kills a donation before it happens.
+
+---
+
+## Technical Highlights
+
+- **Real-time everything** — Firestore `onSnapshot` listeners mean delivery status, chat messages, and new posts update instantly across all connected clients without polling
+- **Three-query merge pattern** — Firestore doesn't support OR across different fields. The chat sidebar fetches matches where the user is helper, needy person, *or* driver using three parallel queries merged client-side into a single deduplicated list
+- **Composite index avoidance** — queries that combine `where()` on one field with `orderBy()` on another require manually created Firestore composite indexes. Where possible, we drop `orderBy` from the query and sort results client-side to keep deployment zero-config
+- **Partial delivery tracking** — a post can have 10 items and only 3 get matched and delivered. The backend checks remaining unclaimed quantities on delivery and marks posts `partially_delivered` vs `delivered` accordingly, keeping the remaining items visible and claimable
+- **OSRM routing** — real driving routes rendered on the map between pickup and dropoff, no API key required
+- **Nominatim geocoding** — forward and reverse geocoding for address lookup and display, also free and keyless
+- **createPortal for z-index isolation** — the chat drawer is rendered at `document.body` level via React portal so it escapes the sticky header's stacking context and always appears on top
+- **Write ordering for consistency** — the claim endpoint creates the match document first, then updates post item quantities. If the match write fails, nothing is left in a broken state. The original code did this backwards and caused items to get stuck as "claimed" with no matching match document
 
 ---
 
 ## Stack
 
-| Layer | Tech |
+| | |
 |---|---|
-| Frontend | React 18, TypeScript, Vite, Tailwind, shadcn/ui |
-| Backend | FastAPI (Python 3.11), Cloud Run |
-| Database | Firestore (real-time) |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Backend | FastAPI on Cloud Run (Python 3.11) |
+| Database | Firestore |
 | Auth | Firebase Auth (Google sign-in) |
 | Storage | Firebase Storage |
-| AI | Gemini Vision (photo → structured item list) |
-| Maps | Leaflet + OSRM (no API key needed) |
-| Geocoding | Nominatim (no API key needed) |
-
----
-
-## Self-hosting
-
-### Step 1 — Browser setup (~15 min, one-time)
-
-| # | Where | What |
-|---|---|---|
-| 1 | [console.cloud.google.com](https://console.cloud.google.com) | Create a GCP project + link billing. Save the Project ID. |
-| 2 | [console.firebase.google.com](https://console.firebase.google.com) | Add project → pick your GCP project → skip Analytics. |
-| 3 | Firebase Console → `</>` icon | Register web app `bridge-web` → copy the `firebaseConfig` object. |
-| 4 | Firebase → Authentication → Google | Enable Google sign-in, set support email. |
-| 5 | Firebase → Firestore Database | Create database → Production mode → `us-central1`. |
-| 6 | Firebase → Storage | Get started → Production mode → same region. |
-| 7 | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Create an API key scoped to your project. Save it. |
-
-### Step 2 — Authenticate CLIs
-
-```bash
-gcloud auth login
-gcloud auth application-default login
-firebase login
-```
-
-### Step 3 — Create your env files
-
-**`backend/.env.local`** — don't commit this:
-```
-FIREBASE_PROJECT_ID=your-project-id
-GEMINI_API_KEY=AIza-your-key-here
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-**`frontend/.env.local`** — don't commit this either:
-```
-VITE_FIREBASE_API_KEY=AIzaSy...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123:web:abc123
-VITE_BACKEND_URL=http://localhost:8080
-```
-
-The setup script will overwrite `VITE_BACKEND_URL` with the real Cloud Run URL automatically.
-
-### Step 4 — Deploy
-
-From the `bridge/` directory:
-
-```bash
-# Mac/Linux/Git Bash
-bash scripts/setup.sh
-
-# Windows PowerShell
-.\scripts\setup.ps1
-```
-
-This will:
-- Point your CLIs at the right project
-- Enable all required GCP APIs
-- Deploy Firestore rules and indexes
-- Set Storage CORS headers
-- Build and deploy the backend to Cloud Run
-- Patch `frontend/.env.local` with the Cloud Run URL
-- Build and deploy the frontend to Firebase Hosting
-
-### Step 5 — Add your hosting domain to Firebase Auth
-
-Firebase Console → Authentication → Settings → Authorized domains → Add `your-project-id.web.app`
-
----
-
-## Local dev
-
-```bash
-# Backend
-cd backend
-uvicorn main:app --reload --port 8080
-
-# Frontend (new terminal)
-cd frontend
-npm run dev
-```
-
-After running the setup script, `frontend/.env.local` points at Cloud Run. Change `VITE_BACKEND_URL` back to `http://localhost:8080` if you want to run the backend locally.
-
-## Re-deploying after changes
-
-```bash
-# Backend only
-bash scripts/deploy-backend.sh
-
-# Frontend only
-bash scripts/deploy-frontend.sh
-
-# Both
-bash scripts/deploy-backend.sh && bash scripts/deploy-frontend.sh
-```
-
-## Seed data
-
-Drop `.jpg`/`.jpeg` files into `seed-photos/` then run:
-
-```bash
-PROJECT_ID=your-project-id python scripts/seed.py
-```
+| AI | Gemini Vision (`gemini-2.5-flash`) |
+| Maps | Leaflet + react-leaflet |
+| Routing | OSRM (open source, no key) |
+| Geocoding | Nominatim (open source, no key) |
+| Hosting | Firebase Hosting |
