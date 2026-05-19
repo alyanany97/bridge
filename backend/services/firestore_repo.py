@@ -287,11 +287,12 @@ def list_reports(status: str = "pending", limit: int = 50) -> list[dict]:
         db()
         .collection("reports")
         .where("status", "==", status)
-        .order_by("createdAt", direction="DESCENDING")
         .limit(limit)
         .stream()
     )
-    return [_serialize(d.to_dict()) for d in docs]
+    result = [_serialize(d.to_dict()) for d in docs]
+    result.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+    return result
 
 
 def resolve_report(report_id: str, action: str, note: str | None) -> None:
