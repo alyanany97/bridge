@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HandHeart, Loader2 } from "lucide-react";
 import { signInWithPopup } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -6,11 +6,30 @@ import { useNavigate } from "react-router-dom";
 import { auth, db, googleProvider } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/hooks/useAuth";
+
+const ROLE_DESTINATIONS: Record<string, string> = {
+  helper: "/helper",
+  driver: "/driver",
+  organization: "/org",
+  admin: "/admin",
+};
 
 export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+
+  // Redirect already-authenticated users straight to their home
+  useEffect(() => {
+    if (authLoading || !user) return;
+    user.getIdTokenResult().then((result) => {
+      const role = result.claims.role as string | undefined;
+      if (role) navigate(ROLE_DESTINATIONS[role] ?? "/needy", { replace: true });
+      else navigate("/onboarding", { replace: true });
+    });
+  }, [user, authLoading, navigate]);
 
   async function handleSignIn() {
     setLoading(true);
@@ -20,13 +39,7 @@ export default function SignIn() {
       const userDoc = await getDoc(doc(db, "users", result.user.uid));
       if (userDoc.exists()) {
         const role = userDoc.data().role as string;
-        const destinations: Record<string, string> = {
-          helper: "/helper",
-          driver: "/driver",
-          organization: "/org",
-          admin: "/admin",
-        };
-        navigate(destinations[role] ?? "/needy");
+        navigate(ROLE_DESTINATIONS[role] ?? "/needy");
       } else {
         navigate("/onboarding");
       }
@@ -35,6 +48,14 @@ export default function SignIn() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (

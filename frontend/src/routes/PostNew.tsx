@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -12,6 +12,11 @@ import PageShell from "@/components/PageShell";
 import PhotoIntake from "@/components/PhotoIntake";
 import ItemChips, { type Item } from "@/components/ItemChips";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { useEffectiveRole } from "@/hooks/useEffectiveRole";
+
+const ROLE_HOME: Record<string, string> = {
+  needy: "/needy", helper: "/helper", driver: "/driver", organization: "/org", admin: "/admin",
+};
 
 interface ParsedData {
   category: string;
@@ -24,6 +29,13 @@ export default function PostNew() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const kind = (searchParams.get("kind") ?? "offer") as "offer" | "need";
+  const { role, loading: roleLoading } = useEffectiveRole();
+
+  // Drivers can't create posts
+  useEffect(() => {
+    if (roleLoading) return;
+    if (role === "driver") navigate(ROLE_HOME.driver, { replace: true });
+  }, [role, roleLoading, navigate]);
   const { coords } = useGeolocation();
 
   const [parsed, setParsed] = useState<ParsedData | null>(null);
@@ -67,7 +79,7 @@ export default function PostNew() {
       });
 
       toast.success(kind === "offer" ? "Offer posted!" : "Request posted!");
-      navigate(kind === "offer" ? "/helper" : "/needy");
+      navigate(ROLE_HOME[role ?? "helper"] ?? "/helper");
     } catch {
       toast.error("Failed to post. Please try again.");
     } finally {
