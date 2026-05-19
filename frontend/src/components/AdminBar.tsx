@@ -1,7 +1,10 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ShieldCheck, HandHeart, Gift, Truck, Building2 } from "lucide-react";
 import { useRole } from "@/hooks/useRole";
 import { useAdminPreview } from "@/contexts/AdminPreviewContext";
+import { useAuth } from "@/hooks/useAuth";
+
+const PUBLIC_PATHS = ["/", "/privacy", "/terms", "/onboarding"];
 
 const PREVIEW_ROLES = [
   { value: null,           label: "Admin",  icon: <ShieldCheck size={11} />, path: "/admin" },
@@ -13,10 +16,13 @@ const PREVIEW_ROLES = [
 
 export default function AdminBar() {
   const { role } = useRole();
+  const { user } = useAuth();
   const { previewRole, setPreviewRole } = useAdminPreview();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-  if (role !== "admin") return null;
+  if (!user || role !== "admin") return null;
+  if (PUBLIC_PATHS.includes(pathname)) return null;
 
   const active = previewRole ?? null;
 
