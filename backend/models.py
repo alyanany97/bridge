@@ -103,3 +103,15 @@ class RateMatchBody(BaseModel):
 
 class CancelMatchBody(BaseModel):
     reason: Optional[str] = Field(None, max_length=200)
+
+
+class ReportBody(BaseModel):
+    target_type: Literal["post", "user", "message"]
+    target_id: str = Field(..., min_length=1, max_length=128)
+    reason: Literal["spam", "inappropriate", "offensive", "fake", "other"]
+    details: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("details")
+    @classmethod
+    def strip_details(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip() if v else v

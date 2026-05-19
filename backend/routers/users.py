@@ -86,6 +86,43 @@ async def remove_fcm_token(
     return {"ok": True}
 
 
+# ── Blocks ────────────────────────────────────────────────────────────────
+
+@router.post("/{uid}/block")
+@limiter.limit("30/minute")
+async def block_user(
+    request: Request,
+    uid: str,
+    user: dict = Depends(get_current_user),
+):
+    if uid == user["uid"]:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Cannot block yourself")
+    firestore_repo.block_user(user["uid"], uid)
+    return {"ok": True}
+
+
+@router.delete("/{uid}/block")
+@limiter.limit("30/minute")
+async def unblock_user(
+    request: Request,
+    uid: str,
+    user: dict = Depends(get_current_user),
+):
+    firestore_repo.unblock_user(user["uid"], uid)
+    return {"ok": True}
+
+
+@router.get("/blocked")
+@limiter.limit("30/minute")
+async def get_blocked(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    uids = firestore_repo.get_blocked_uids(user["uid"])
+    return {"blockedUids": list(uids)}
+
+
 # ── Admin-only ─────────────────────────────────────────────────────────────
 
 ADMIN_KEY = os.getenv("BRIDGE_ADMIN_KEY", "")

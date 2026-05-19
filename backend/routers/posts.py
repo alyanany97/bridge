@@ -39,6 +39,7 @@ async def list_posts(
     cursor: str = Query(None, description="postId of the last seen item for pagination"),
     user: dict = Depends(get_current_user),
 ):
+    blocked_uids = firestore_repo.get_blocked_uids(user["uid"])
     posts = firestore_repo.list_posts(
         kind=kind,
         limit=limit,
@@ -46,6 +47,7 @@ async def list_posts(
         lat=lat,
         lng=lng,
         radius_km=radius_km,
+        blocked_uids=blocked_uids,
     )
     next_cursor = posts[-1]["postId"] if len(posts) == limit else None
     return {"posts": posts, "nextCursor": next_cursor}

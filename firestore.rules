@@ -96,6 +96,16 @@ service cloud.firestore {
                     && resource.data.status == 'open';
     }
 
+    // ─── Reports — backend-only writes, no client reads ──────────────────────
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    // ─── Blocks — owner reads/writes their own block list ────────────────────
+    match /users/{uid}/blocks/{blockedUid} {
+      allow read, write: if isOwner(uid);
+    }
+
     // ─── Matches ─────────────────────────────────────────────────────────────
 
     match /matches/{matchId} {
