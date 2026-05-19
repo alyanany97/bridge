@@ -89,7 +89,10 @@ export default function SignIn() {
         </Button>
 
         <p className="text-center text-xs text-muted-foreground">
-          By continuing, you agree to be kind. That's the only rule.
+          By continuing, you agree to our{" "}
+          <a href="/terms" className="underline hover:text-foreground">Terms of Service</a>
+          {" "}and{" "}
+          <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
         </p>
       </div>
     </div>

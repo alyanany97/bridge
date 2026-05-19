@@ -16,6 +16,8 @@ import MatchStatus from "@/routes/MatchStatus";
 import DriverHome from "@/routes/DriverHome";
 import ProfileEdit from "@/routes/ProfileEdit";
 import AdminPanel from "@/routes/AdminPanel";
+import PrivacyPolicy from "@/routes/PrivacyPolicy";
+import TermsOfService from "@/routes/TermsOfService";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -59,6 +61,10 @@ export default function App() {
 
         {/* Admin — role check happens inside AdminPanel */}
         <Route path="/admin" element={<AuthGate><AdminPanel /></AuthGate>} />
+
+        {/* Public legal pages — no auth required */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
       </Routes>
     </BrowserRouter>
     </AdminPreviewProvider>
