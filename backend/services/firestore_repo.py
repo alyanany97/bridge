@@ -305,16 +305,49 @@ def resolve_report(report_id: str, action: str, note: str | None) -> None:
 def list_users(search: str = "", limit: int = 50) -> list[dict]:
     col = db().collection("users")
     if search:
-        end = search[:-1] + chr(ord(search[-1]) + 1)
-        docs = (
-            col.where("email", ">=", search)
-               .where("email", "<", end)
-               .limit(limit)
-               .stream()
-        )
+        search_lower = search.lower()
+        all_docs = list(col.limit(200).stream())
+        result = []
+        for d in all_docs:
+            data = d.to_dict()
+            if (
+                search_lower in (data.get("email") or "").lower()
+                or search_lower in (data.get("displayName") or "").lower()
+                or search_lower in (data.get("businessName") or "").lower()
+            ):
+                result.append(data)
+                if len(result) >= limit:
+                    break
+        return [_serialize(d) for d in result]
     else:
         docs = col.order_by("role").limit(limit).stream()
-    return [_serialize(d.to_dict()) for d in docs]
+        return [_serialize(d.to_dict()) for d in docs]
+
+
+def list_all_posts(
+    kind: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    q = db().collection("posts")
+    if kind:
+        q = q.where("kind", "==", kind)
+    if status:
+        q = q.where("status", "==", status)
+    docs = list(q.limit(min(limit * 3, 300)).stream())
+    result = [_serialize(d.to_dict()) for d in docs]
+    result.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+    return result[:limit]
+
+
+def count_user_posts(uid: str) -> int:
+    docs = (
+        db().collection("posts")
+        .where("authorId", "==", uid)
+        .limit(200)
+        .stream()
+    )
+    return sum(1 for _ in docs)
 
 
 def suspend_user(uid: str) -> None:
