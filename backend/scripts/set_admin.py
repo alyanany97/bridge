@@ -25,11 +25,16 @@ def set_admin(uid: str) -> None:
         firebase_admin.initialize_app()
 
     auth.set_custom_user_claims(uid, {"role": "admin"})
+    print(f"✓ Firebase Auth custom claim set for uid: {uid}")
 
-    db = firestore.client()
-    db.collection("users").document(uid).set({"role": "admin"}, merge=True)
+    try:
+        db = firestore.client()
+        db.collection("users").document(uid).set({"role": "admin"}, merge=True)
+        print("✓ Firestore user document updated.")
+    except Exception as e:
+        print(f"⚠  Firestore write failed (IAM may need ~2 min to propagate): {e}")
+        print("   Re-run this script in a moment to sync Firestore, or update manually.")
 
-    print(f"✓ Admin role set for uid: {uid}")
     print("  Sign out and sign back in for the new claim to take effect.")
 
 
