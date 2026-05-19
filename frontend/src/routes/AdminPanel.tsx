@@ -4,7 +4,7 @@ import {
   HandHeart, Flag, Users, CheckCircle2, XCircle, AlertTriangle,
   ShieldOff, ShieldCheck, ExternalLink, Loader2, Search, FileText,
   RefreshCw, MapPin, Building2, Truck, HandHeart as NeedyIcon,
-  Gift, ChevronDown, ChevronUp, Calendar, Hash,
+  Gift, ChevronDown, Calendar, Hash,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/firebase";
