@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { Loader2 } from "lucide-react";
 
+import { AdminPreviewProvider } from "@/contexts/AdminPreviewContext";
+import AdminBar from "@/components/AdminBar";
 import { useAuth } from "@/hooks/useAuth";
 import SignIn from "@/routes/SignIn";
 import Onboarding from "@/routes/Onboarding";
@@ -32,8 +34,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <AdminPreviewProvider>
     <BrowserRouter>
       <Toaster position="top-center" />
+      <AdminBar />
       <Routes>
         <Route path="/" element={<SignIn />} />
         <Route path="/onboarding" element={<AuthGate><Onboarding /></AuthGate>} />
@@ -57,5 +61,6 @@ export default function App() {
         <Route path="/admin" element={<AuthGate><AdminPanel /></AuthGate>} />
       </Routes>
     </BrowserRouter>
+    </AdminPreviewProvider>
   );
 }

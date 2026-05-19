@@ -350,6 +350,45 @@ def count_user_posts(uid: str) -> int:
     return sum(1 for _ in docs)
 
 
+def delete_user_data(uid: str) -> None:
+    db_client = db()
+
+    # Mark open posts as deleted
+    open_posts = list(
+        db_client.collection("posts")
+        .where("authorId", "==", uid)
+        .where("status", "in", ["open", "partially_delivered"])
+        .stream()
+    )
+    for post in open_posts:
+        post.reference.update({"status": "deleted_account"})
+
+    # Cancel active matches the user is involved in
+    for field in ["helperId", "needyId", "driverId"]:
+        active = list(
+            db_client.collection("matches")
+            .where(field, "==", uid)
+            .where("status", "in", ["pending_driver", "in_transit"])
+            .stream()
+        )
+        for match in active:
+            match.reference.update({
+                "status": "cancelled",
+                "cancelReason": "account_deleted",
+            })
+
+    # Delete blocks subcollection
+    for doc in db_client.collection("users").document(uid).collection("blocks").stream():
+        doc.reference.delete()
+
+    # Delete ratings subcollection
+    for doc in db_client.collection("users").document(uid).collection("ratings").stream():
+        doc.reference.delete()
+
+    # Delete user document
+    db_client.collection("users").document(uid).delete()
+
+
 def suspend_user(uid: str) -> None:
     db().collection("users").document(uid).update({"suspended": True})
 
