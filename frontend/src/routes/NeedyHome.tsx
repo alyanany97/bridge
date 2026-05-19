@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,26 @@ import PostCard from "@/components/PostCard";
 import CategoryFilter, { type Category } from "@/components/CategoryFilter";
 import { usePosts, useMyPosts } from "@/hooks/usePosts";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { useEffectiveRole } from "@/hooks/useEffectiveRole";
+
+const ROLE_HOME: Record<string, string> = {
+  needy: "/needy", helper: "/helper", driver: "/driver", organization: "/org", admin: "/admin",
+};
 
 type Tab = "browse" | "mine";
 
 export default function NeedyHome() {
   const navigate = useNavigate();
+  const { role, loading: roleLoading } = useEffectiveRole();
+
+  useEffect(() => {
+    if (roleLoading) return;
+    if (role !== "needy") {
+      navigate(ROLE_HOME[role ?? ""] ?? "/", { replace: true });
+    }
+  }, [role, roleLoading, navigate]);
+
+  if (roleLoading || role !== "needy") return null;
   const [tab, setTab] = useState<Tab>("browse");
   const [category, setCategory] = useState<Category>("all");
   const { posts: browsePosts, loading: browseLoading, error } = usePosts("offer");

@@ -10,6 +10,7 @@ import PageShell from "@/components/PageShell";
 import { usePendingMatches, useMyDriverMatches } from "@/hooks/usePosts";
 import { timeAgo } from "@/lib/utils";
 import { DocumentData } from "firebase/firestore";
+import { useEffectiveRole } from "@/hooks/useEffectiveRole";
 
 type Tab = "available" | "active";
 
@@ -159,6 +160,20 @@ export default function DriverHome() {
   const { matches: pending, loading: pendingLoading } = usePendingMatches();
   const { matches: mine, loading: mineLoading } = useMyDriverMatches();
   const navigate = useNavigate();
+  const { role, loading: roleLoading } = useEffectiveRole();
+
+  const ROLE_HOME: Record<string, string> = {
+    needy: "/needy", helper: "/helper", driver: "/driver", organization: "/org", admin: "/admin",
+  };
+
+  useEffect(() => {
+    if (roleLoading) return;
+    if (role !== "driver") {
+      navigate(ROLE_HOME[role ?? ""] ?? "/", { replace: true });
+    }
+  }, [role, roleLoading, navigate]);
+
+  if (roleLoading || role !== "driver") return null;
 
   async function acceptDelivery(matchId: string) {
     try {

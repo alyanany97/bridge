@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HandHeart, Gift, Truck, Building2, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "@/firebase";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/hooks/useRole";
 
 const DEMO_CENTER = { lat: 43.5448, lng: -80.2482 }; // Guelph, ON
 
@@ -37,6 +38,20 @@ export default function Onboarding() {
   const [demoLocation, setDemoLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { role: existingRole, loading: roleLoading } = useRole();
+
+  useEffect(() => {
+    if (roleLoading || !existingRole) return;
+    navigate(HOME[existingRole as Role] ?? "/", { replace: true });
+  }, [existingRole, roleLoading, navigate]);
+
+  if (roleLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
 
   async function handleContinue() {
     if (!role) return;
