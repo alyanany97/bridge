@@ -2,6 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
@@ -35,18 +37,66 @@ service cloud.firestore {
       );
     }
 
-    match /users/{uid} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(uid);
+    function validChatMessage(text) {
+      return request.resource.data.senderId == request.auth.uid
+          && text is string
+          && text.size() > 0
+          && text.size() <= 1000;
     }
+
+    // ─── Users ───────────────────────────────────────────────────────────────
+    //
+    // Roles are now set via custom claims by the backend — the role field in
+    // the user document is for display only and cannot be changed by clients.
+
+    match /users/{uid} {
+      // Only the owner reads their own profile; backend Admin SDK serves cross-user data
+      allow read: if isOwner(uid);
+
+      // Backend (Admin SDK) handles creates/updates — but allow client create on first onboarding
+      // as a fallback. Role field is immutable after first set.
+      allow create: if isOwner(uid)
+                    && request.resource.data.role in ['helper', 'needy', 'driver']
+                    && request.resource.data.keys().hasAll(['role', 'displayName']);
+
+      // Owners can update profile fields but NEVER their role or rating stats
+      allow update: if isOwner(uid)
+                    && !('role' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('ratingAvg' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('ratingCount' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('ratingTotal' in request.resource.data.diff(resource.data).affectedKeys());
+
+      allow delete: if false;
+
+      // Ratings are backend-only — clients can read their own
+      match /ratings/{ratingId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ─── Posts ───────────────────────────────────────────────────────────────
 
     match /posts/{postId} {
       allow read: if isSignedIn();
+
       allow create: if isSignedIn()
-                    && request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-                            && resource.data.authorId == request.auth.uid;
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.status == 'open'
+                    && request.auth.token.role in ['helper', 'needy'];
+
+      // Authors can only edit content fields — all status transitions are backend-only
+      allow update: if isSignedIn()
+                    && resource.data.authorId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['description', 'items', 'location', 'photoURL']);
+
+      allow delete: if isSignedIn()
+                    && resource.data.authorId == request.auth.uid
+                    && resource.data.status == 'open';
     }
+
+    // ─── Matches ─────────────────────────────────────────────────────────────
 
     match /matches/{matchId} {
       allow read: if isSignedIn() && (
@@ -57,35 +107,28 @@ service cloud.firestore {
       );
       allow write: if false;
 
-      function canSend(text) {
-        return request.resource.data.senderId == request.auth.uid
-            && text is string
-            && text.size() > 0;
-      }
-
-      // All 3 participants
       match /chat_group/{msgId} {
         allow read:   if isMatchParticipant(matchId);
-        allow create: if isMatchParticipant(matchId)
-                      && canSend(request.resource.data.text);
+        allow create: if isMatchParticipant(matchId) && validChatMessage(request.resource.data.text);
+        allow update, delete: if false;
       }
 
-      // Helper ↔ Needy only
       match /chat_helper_needy/{msgId} {
         allow read:   if isHelperOrNeedy(matchId);
-        allow create: if isHelperOrNeedy(matchId) && canSend(request.resource.data.text);
+        allow create: if isHelperOrNeedy(matchId) && validChatMessage(request.resource.data.text);
+        allow update, delete: if false;
       }
 
-      // Helper ↔ Driver only
       match /chat_helper_driver/{msgId} {
         allow read:   if isHelperOrDriver(matchId);
-        allow create: if isHelperOrDriver(matchId) && canSend(request.resource.data.text);
+        allow create: if isHelperOrDriver(matchId) && validChatMessage(request.resource.data.text);
+        allow update, delete: if false;
       }
 
-      // Needy ↔ Driver only
       match /chat_needy_driver/{msgId} {
         allow read:   if isNeedyOrDriver(matchId);
-        allow create: if isNeedyOrDriver(matchId) && canSend(request.resource.data.text);
+        allow create: if isNeedyOrDriver(matchId) && validChatMessage(request.resource.data.text);
+        allow update, delete: if false;
       }
     }
   }

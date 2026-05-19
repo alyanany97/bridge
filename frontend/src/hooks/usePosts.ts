@@ -20,9 +20,20 @@ export interface Post {
   description: string;
   photoURL: string;
   location: { lat: number; lng: number };
-  status: "open" | "claimed" | "in_transit" | "delivered" | "partially_delivered";
+  geohash?: string;
+  status: "open" | "claimed" | "in_transit" | "delivered" | "partially_delivered" | "expired";
   matchedPostId: string | null;
   createdAt: { seconds: number } | null;
+  expiresAt?: { seconds: number } | string | null;
+}
+
+function isExpired(post: Post): boolean {
+  if (!post.expiresAt) return false;
+  const seconds =
+    typeof post.expiresAt === "string"
+      ? new Date(post.expiresAt).getTime() / 1000
+      : (post.expiresAt as { seconds: number }).seconds;
+  return seconds < Date.now() / 1000;
 }
 
 export function usePosts(kind: "offer" | "need") {
@@ -40,7 +51,11 @@ export function usePosts(kind: "offer" | "need") {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setPosts(snap.docs.map((d) => d.data() as Post));
+        // Filter expired posts client-side (avoids a composite index requirement)
+        const live = snap.docs
+          .map((d) => d.data() as Post)
+          .filter((p) => !isExpired(p));
+        setPosts(live);
         setLoading(false);
       },
       (err) => {
@@ -61,7 +76,7 @@ export function useMyPosts(kind: "offer" | "need") {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) { setLoading(false); return; }
-    // No orderBy here — sort client-side to avoid needing a composite index
+
     const q = query(
       collection(db, "posts"),
       where("kind", "==", kind),
@@ -76,7 +91,7 @@ export function useMyPosts(kind: "offer" | "need") {
         setPosts(sorted);
         setLoading(false);
       },
-      () => setLoading(false) // on error, stop spinning
+      () => setLoading(false)
     );
     return unsub;
   }, [kind]);
@@ -90,8 +105,7 @@ export function usePost(postId: string | undefined) {
 
   useEffect(() => {
     if (!postId) return;
-    const ref = doc(db, "posts", postId);
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(doc(db, "posts", postId), (snap) => {
       setPost(snap.exists() ? (snap.data() as Post) : null);
       setLoading(false);
     });
@@ -107,8 +121,7 @@ export function useMatch(matchId: string | undefined) {
 
   useEffect(() => {
     if (!matchId) return;
-    const ref = doc(db, "matches", matchId);
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(doc(db, "matches", matchId), (snap) => {
       setMatch(snap.exists() ? snap.data() : null);
       setLoading(false);
     });
@@ -123,7 +136,6 @@ export function usePendingMatches() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // No orderBy — avoids needing a composite index; sort client-side instead
     const q = query(
       collection(db, "matches"),
       where("status", "==", "pending_driver")
@@ -152,6 +164,7 @@ export function useMyDriverMatches() {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) { setLoading(false); return; }
+
     const q = query(collection(db, "matches"), where("driverId", "==", uid));
     const unsub = onSnapshot(
       q,

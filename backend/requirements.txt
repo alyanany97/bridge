@@ -5,3 +5,7 @@ google-genai>=1.0.0
 pydantic>=2.9.0
 python-dotenv>=1.0.1
 python-multipart>=0.0.12
+slowapi>=0.1.9
+limits>=3.13.0
+pygeohash>=1.2.0
+ruff>=0.4.0

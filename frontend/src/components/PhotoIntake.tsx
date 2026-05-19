@@ -22,6 +22,32 @@ interface Props {
 
 type State = "capture" | "parsing" | "error";
 
+/** Resize an image client-side before upload. 1024px wide @ 85% JPEG quality.
+ *  Reduces a typical phone photo from ~5MB to ~250KB — 20x cost saving on Storage. */
+async function resizeImage(file: File, maxWidth = 1024): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("No canvas context")); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
+        "image/jpeg",
+        0.85
+      );
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export default function PhotoIntake({ kind, onParsed }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State>("capture");
@@ -31,15 +57,16 @@ export default function PhotoIntake({ kind, onParsed }: Props) {
   async function handleFile(file: File) {
     setState("parsing");
     setErrorMsg(null);
-    const localUrl = URL.createObjectURL(file);
-    setPhotoPreview(localUrl);
+    setPhotoPreview(URL.createObjectURL(file));
 
     try {
+      // Resize before upload — keeps Storage costs low and Gemini response fast
+      const resized = await resizeImage(file);
       const storageRef = ref(storage, `posts/${uuidv4()}.jpg`);
-      await uploadBytes(storageRef, file);
+      await uploadBytes(storageRef, resized, { contentType: "image/jpeg" });
       const photoURL = await getDownloadURL(storageRef);
 
-      const result = await api<ParseResult>("/ai/parse-photo", {
+      const result = await api<ParseResult>("/api/v1/ai/parse-photo", {
         method: "POST",
         body: JSON.stringify({ photo_url: photoURL, kind }),
       });
@@ -53,23 +80,14 @@ export default function PhotoIntake({ kind, onParsed }: Props) {
   }
 
   function handleFallback() {
-    onParsed({
-      category: "mixed",
-      items: [{ name: "", quantity: 1 }],
-      description: "",
-      photoURL: "",
-    });
+    onParsed({ category: "mixed", items: [{ name: "", quantity: 1 }], description: "", photoURL: "" });
   }
 
   if (state === "parsing") {
     return (
       <div className="space-y-4">
         {photoPreview && (
-          <img
-            src={photoPreview}
-            alt="Uploaded photo"
-            className="max-h-64 w-full rounded-xl object-cover"
-          />
+          <img src={photoPreview} alt="Uploaded photo" className="max-h-64 w-full rounded-xl object-cover" />
         )}
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -101,9 +119,7 @@ export default function PhotoIntake({ kind, onParsed }: Props) {
         <div className="text-center">
           <p className="text-sm font-semibold">Take a photo or upload</p>
           <p className="text-xs text-muted-foreground">
-            {kind === "offer"
-              ? "Photograph items you'd like to donate."
-              : "Show us what you need help with."}
+            {kind === "offer" ? "Photograph items you'd like to donate." : "Show us what you need help with."}
           </p>
         </div>
       </button>
@@ -118,10 +134,7 @@ export default function PhotoIntake({ kind, onParsed }: Props) {
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-        }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
       />
     </div>
   );

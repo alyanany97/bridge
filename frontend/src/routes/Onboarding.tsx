@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { HandHeart, Gift, Truck, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/firebase";
+import { auth } from "@/firebase";
+import { api, refreshToken } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,7 +13,7 @@ const DEMO_CENTER = { lat: 43.5448, lng: -80.2482 }; // Guelph, ON
 type Role = "needy" | "helper" | "driver";
 
 const HOME: Record<Role, string> = {
-  needy:  "/needy",
+  needy: "/needy",
   helper: "/helper",
   driver: "/driver",
 };
@@ -22,11 +22,14 @@ export default function Onboarding() {
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(false);
   const [demoLocation, setDemoLocation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   async function handleContinue() {
     if (!role) return;
     setLoading(true);
+    setError(null);
+
     try {
       const location = await new Promise<{ lat: number; lng: number }>((resolve) => {
         if (!navigator.geolocation) {
@@ -42,16 +45,26 @@ export default function Onboarding() {
       });
 
       const user = auth.currentUser!;
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        role,
-        location,
-        createdAt: serverTimestamp(),
+
+      // Send role to backend — this sets the Firebase custom claim AND writes the user doc.
+      // Custom claims live in the JWT, so no Firestore read is needed on every API call.
+      await api("/api/v1/users/role", {
+        method: "POST",
+        body: JSON.stringify({
+          role,
+          display_name: user.displayName,
+          location,
+        }),
       });
 
+      // Force-refresh the token so the new role claim is picked up immediately.
+      // Without this the current token would be stale until natural expiry (~1 hour).
+      await refreshToken();
+
       navigate(HOME[role]);
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+      console.error("Onboarding error:", err);
     } finally {
       setLoading(false);
     }
@@ -111,7 +124,13 @@ export default function Onboarding() {
 
         {demoLocation && (
           <Alert>
-            <AlertDescription>We'll use a demo location for this session.</AlertDescription>
+            <AlertDescription>Using a demo location for this session.</AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
