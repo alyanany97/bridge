@@ -35,6 +35,8 @@ export default function UserMenu() {
     : "?";
 
   async function handleSignOut() {
+    const { unregisterFcmToken } = await import("@/hooks/useNotifications");
+    await unregisterFcmToken();
     await signOut(auth);
     navigate("/");
   }
