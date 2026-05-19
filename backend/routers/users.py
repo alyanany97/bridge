@@ -13,6 +13,22 @@ from services import firestore_repo
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+@router.delete("/me")
+@limiter.limit("3/minute")
+async def delete_account(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Permanently deletes the account and all associated data."""
+    uid = user["uid"]
+    firestore_repo.delete_user_data(uid)
+    try:
+        fb_auth.delete_user(uid)
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @router.post("/role")
 @limiter.limit("5/minute")
 async def set_role(

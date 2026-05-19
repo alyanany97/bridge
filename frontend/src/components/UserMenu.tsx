@@ -3,7 +3,7 @@ import { signOut } from "firebase/auth";
 import { LogOut, UserCircle, ShieldCheck } from "lucide-react";
 import { auth } from "@/firebase";
 import { useAuth } from "@/hooks/useAuth";
-import { useRole } from "@/hooks/useRole";
+import { useEffectiveRole } from "@/hooks/useEffectiveRole";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,7 +25,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function UserMenu() {
   const { user } = useAuth();
-  const { role } = useRole();
+  const { role, isAdmin } = useEffectiveRole();
   const navigate = useNavigate();
 
   if (!user) return null;
@@ -75,7 +75,7 @@ export default function UserMenu() {
           Edit profile
         </DropdownMenuItem>
 
-        {role === "admin" && (
+        {isAdmin && (
           <DropdownMenuItem onClick={() => navigate("/admin")} className="gap-2 cursor-pointer text-amber-600 focus:text-amber-600">
             <ShieldCheck size={15} />
             Admin panel

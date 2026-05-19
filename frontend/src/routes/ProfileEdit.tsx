@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, MapPin, Navigation, Building2, Truck, HandHeart, Gift } from "lucide-react";
-import { updateProfile } from "firebase/auth";
+import { ArrowLeft, Loader2, MapPin, Navigation, Building2, Truck, HandHeart, Gift, Trash2 } from "lucide-react";
+import { updateProfile, signOut } from "firebase/auth";
 import { auth } from "@/firebase";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import PageShell from "@/components/PageShell";
-import { useRole } from "@/hooks/useRole";
+import { useEffectiveRole } from "@/hooks/useEffectiveRole";
 
 const ROLE_HOME: Record<string, string> = {
   needy: "/needy",
@@ -81,7 +84,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
 export default function ProfileEdit() {
   const navigate = useNavigate();
   const user = auth.currentUser!;
-  const { role, loading: roleLoading } = useRole();
+  const { role, loading: roleLoading, isAdmin } = useEffectiveRole();
 
   const [name, setName] = useState(user.displayName ?? "");
   const [bio, setBio] = useState("");
@@ -98,6 +101,8 @@ export default function ProfileEdit() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -189,6 +194,18 @@ export default function ProfileEdit() {
       toast.error("Failed to save. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    try {
+      await api("/api/v1/users/me", { method: "DELETE" });
+      await signOut(auth);
+      navigate("/");
+    } catch {
+      toast.error("Failed to delete account. Please try again.");
+      setDeleting(false);
     }
   }
 
@@ -337,7 +354,50 @@ export default function ProfileEdit() {
           {saving && <Loader2 size={16} className="mr-2 animate-spin" />}
           Save changes
         </Button>
+
+        {/* Danger zone — not shown for admin previewing another role */}
+        {!isAdmin && (
+          <>
+            <Separator />
+            <div className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-medium text-destructive">Danger zone</p>
+              <p className="text-xs text-muted-foreground">
+                Permanently deletes your account, all your posts, and all associated data. This cannot be undone.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 size={14} />
+                Delete my account
+              </Button>
+            </div>
+          </>
+        )}
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete your account?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete your account, all your posts, and cancel any active deliveries.
+              This action <strong>cannot be undone</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Keep my account
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleting}>
+              {deleting && <Loader2 size={14} className="mr-2 animate-spin" />}
+              Yes, delete everything
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
