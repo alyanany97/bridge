@@ -48,7 +48,7 @@ export default function MatchStatus() {
   async function handleDeliver() {
     setActing(true);
     try {
-      await api(`/matches/${id}/deliver`, { method: "POST" });
+      await api(`/api/v1/matches/${id}/deliver`, { method: "POST" });
       toast.success("Marked as delivered!");
     } catch {
       toast.error("Failed to update delivery status.");

@@ -162,7 +162,7 @@ export default function DriverHome() {
 
   async function acceptDelivery(matchId: string) {
     try {
-      await api(`/matches/${matchId}/accept`, { method: "POST" });
+      await api(`/api/v1/matches/${matchId}/accept`, { method: "POST" });
       toast.success("Delivery accepted! Head to pick up.");
       navigate(`/match/${matchId}`);
     } catch {

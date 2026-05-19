@@ -51,10 +51,10 @@ export default function PostNew() {
       const location = coords ?? storedLocation ?? { lat: 43.5448, lng: -80.2482 };
       // Keep stored location fresh for future posts
       if (coords && JSON.stringify(coords) !== JSON.stringify(storedLocation)) {
-        updateDoc(userRef, { location: coords });
+        updateDoc(userRef, { location: coords }).catch(() => {});
       }
 
-      await api("/posts", {
+      await api("/api/v1/posts", {
         method: "POST",
         body: JSON.stringify({
           kind,

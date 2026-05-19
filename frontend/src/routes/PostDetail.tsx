@@ -93,7 +93,7 @@ export default function PostDetail() {
         index: parseInt(idx),
         quantity: qty,
       }));
-      const match = await api<{ matchId: string }>(`/posts/${post.postId}/claim`, {
+      const match = await api<{ matchId: string }>(`/api/v1/posts/${post.postId}/claim`, {
         method: "POST",
         body: JSON.stringify({ item_claims }),
       });
@@ -161,7 +161,7 @@ export default function PostDetail() {
   const items = post.items as ItemData[];
   const unclaimedItems = items.filter((it) => !it.claimedMatchId);
   const title =
-    items.length > 0 ? items[0].name : post.description.slice(0, 60);
+    items.length > 0 ? items[0].name : (post.description || "Post").slice(0, 60);
 
   return (
     <PageShell>
