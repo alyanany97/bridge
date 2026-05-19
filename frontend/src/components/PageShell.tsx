@@ -2,8 +2,13 @@ import { HandHeart } from "lucide-react";
 import { ReactNode } from "react";
 import UserMenu from "./UserMenu";
 import ChatDrawer from "./ChatDrawer";
+import { useAuth } from "@/hooks/useAuth";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export default function PageShell({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  useNotifications(user?.uid ?? null);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
