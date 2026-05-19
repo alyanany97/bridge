@@ -21,16 +21,17 @@ type Tab = "browse" | "mine";
 
 export default function NeedyHome() {
   const navigate = useNavigate();
-  const { role, loading: roleLoading } = useEffectiveRole();
+  const { role, loading: roleLoading, isAdmin } = useEffectiveRole();
 
   useEffect(() => {
-    if (roleLoading) return;
+    if (roleLoading || isAdmin) return;
     if (role !== "needy") {
       navigate(ROLE_HOME[role ?? ""] ?? "/", { replace: true });
     }
-  }, [role, roleLoading, navigate]);
+  }, [role, roleLoading, isAdmin, navigate]);
 
-  if (roleLoading || role !== "needy") return null;
+  if (roleLoading) return null;
+  if (!isAdmin && role !== "needy") return null;
   const [tab, setTab] = useState<Tab>("browse");
   const [category, setCategory] = useState<Category>("all");
   const { posts: browsePosts, loading: browseLoading, error } = usePosts("offer");
