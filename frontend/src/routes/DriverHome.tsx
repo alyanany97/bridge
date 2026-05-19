@@ -160,20 +160,21 @@ export default function DriverHome() {
   const { matches: pending, loading: pendingLoading } = usePendingMatches();
   const { matches: mine, loading: mineLoading } = useMyDriverMatches();
   const navigate = useNavigate();
-  const { role, loading: roleLoading } = useEffectiveRole();
+  const { role, loading: roleLoading, isAdmin } = useEffectiveRole();
 
   const ROLE_HOME: Record<string, string> = {
     needy: "/needy", helper: "/helper", driver: "/driver", organization: "/org", admin: "/admin",
   };
 
   useEffect(() => {
-    if (roleLoading) return;
+    if (roleLoading || isAdmin) return;
     if (role !== "driver") {
       navigate(ROLE_HOME[role ?? ""] ?? "/", { replace: true });
     }
-  }, [role, roleLoading, navigate]);
+  }, [role, roleLoading, isAdmin, navigate]);
 
-  if (roleLoading || role !== "driver") return null;
+  if (roleLoading) return null;
+  if (!isAdmin && role !== "driver") return null;
 
   async function acceptDelivery(matchId: string) {
     try {
