@@ -38,3 +38,26 @@ export async function refreshToken(): Promise<void> {
   const user = auth.currentUser;
   if (user) await user.getIdToken(true);
 }
+
+export type ReportReason = "spam" | "inappropriate" | "offensive" | "fake" | "other";
+export type ReportTargetType = "post" | "user" | "message";
+
+export async function submitReport(
+  targetType: ReportTargetType,
+  targetId: string,
+  reason: ReportReason,
+  details?: string,
+): Promise<void> {
+  await api("/api/v1/reports", {
+    method: "POST",
+    body: JSON.stringify({ target_type: targetType, target_id: targetId, reason, details }),
+  });
+}
+
+export async function blockUser(uid: string): Promise<void> {
+  await api(`/api/v1/users/${uid}/block`, { method: "POST" });
+}
+
+export async function unblockUser(uid: string): Promise<void> {
+  await api(`/api/v1/users/${uid}/block`, { method: "DELETE" });
+}

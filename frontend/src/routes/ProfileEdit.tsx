@@ -1,21 +1,49 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, MapPin, Navigation, HandHeart, Gift, Truck } from "lucide-react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ArrowLeft, Loader2, MapPin, Navigation, Building2, Truck, HandHeart, Gift } from "lucide-react";
 import { updateProfile } from "firebase/auth";
-import { auth, db } from "@/firebase";
+import { auth } from "@/firebase";
+import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import PageShell from "@/components/PageShell";
+import { useRole } from "@/hooks/useRole";
 
-type Role = "needy" | "helper" | "driver";
+const ROLE_HOME: Record<string, string> = {
+  needy: "/needy",
+  helper: "/helper",
+  driver: "/driver",
+  organization: "/org",
+  admin: "/admin",
+};
 
-const HOME: Record<Role, string> = { needy: "/needy", helper: "/helper", driver: "/driver" };
+const ROLE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  needy:        { label: "Needs help",    icon: <HandHeart size={13} />, color: "bg-red-50 text-red-700 border-red-200" },
+  helper:       { label: "Helper",        icon: <Gift size={13} />,      color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  driver:       { label: "Driver",        icon: <Truck size={13} />,     color: "bg-blue-50 text-blue-700 border-blue-200" },
+  organization: { label: "Organization",  icon: <Building2 size={13} />, color: "bg-violet-50 text-violet-700 border-violet-200" },
+  admin:        { label: "Admin",         icon: null,                    color: "bg-amber-50 text-amber-700 border-amber-200" },
+};
+
+const VEHICLE_TYPES = [
+  { value: "walking", label: "On foot" },
+  { value: "bike", label: "Bicycle" },
+  { value: "car", label: "Car" },
+  { value: "van", label: "Van / Truck" },
+];
+
+const BUSINESS_TYPES = [
+  { value: "restaurant", label: "Restaurant / Café" },
+  { value: "grocery", label: "Grocery / Food store" },
+  { value: "retail", label: "Retail / Clothing" },
+  { value: "office", label: "Office / Corporate" },
+  { value: "food_bank", label: "Food bank / Nonprofit" },
+  { value: "other", label: "Other" },
+];
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
@@ -24,7 +52,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
       { headers: { "Accept-Language": "en" } }
     );
     const data = await res.json();
-    // Build a short, readable address from components
     const a = data.address ?? {};
     const parts = [
       a.house_number && a.road ? `${a.house_number} ${a.road}` : a.road,
@@ -51,47 +78,53 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   }
 }
 
-const roleCards: { role: Role; icon: React.ReactNode; title: string; desc: string }[] = [
-  { role: "needy",  icon: <HandHeart size={28} />, title: "I need help",    desc: "Request food or clothing nearby" },
-  { role: "helper", icon: <Gift size={28} />,      title: "I want to help", desc: "Share food or clothing nearby" },
-  { role: "driver", icon: <Truck size={28} />,     title: "I'm a driver",   desc: "Pick up and deliver items" },
-];
-
 export default function ProfileEdit() {
   const navigate = useNavigate();
   const user = auth.currentUser!;
+  const { role, loading: roleLoading } = useRole();
 
   const [name, setName] = useState(user.displayName ?? "");
+  const [bio, setBio] = useState("");
   const [address, setAddress] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [role, setRole] = useState<Role | null>(null);
+  // Driver fields
+  const [vehicleType, setVehicleType] = useState("car");
+  // Org fields
+  const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState("other");
+  const [website, setWebsite] = useState("");
+
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // Load existing profile
   useEffect(() => {
+    if (roleLoading) return;
     async function load() {
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (!snap.exists()) { setLoadingProfile(false); return; }
-      const data = snap.data();
-      setRole(data.role ?? null);
-      if (data.location) {
-        setCoords(data.location);
-        const addr = await reverseGeocode(data.location.lat, data.location.lng);
-        setAddress(addr);
+      // Fetch the profile via API instead of direct Firestore read
+      try {
+        const profile = await api<Record<string, any>>("/api/v1/users/me");
+        setBio(profile.bio ?? "");
+        setVehicleType(profile.vehicleType ?? "car");
+        setBusinessName(profile.businessName ?? "");
+        setBusinessType(profile.businessType ?? "other");
+        setWebsite(profile.website ?? "");
+        if (profile.location) {
+          setCoords(profile.location);
+          const addr = await reverseGeocode(profile.location.lat, profile.location.lng);
+          setAddress(addr);
+        }
+      } catch {
+        // Swallow — fields will just be empty
       }
       setLoadingProfile(false);
     }
     load();
-  }, [user.uid]);
+  }, [roleLoading]);
 
   async function handleUseGPS() {
-    if (!navigator.geolocation) {
-      setGeoError("GPS not available in this browser.");
-      return;
-    }
+    if (!navigator.geolocation) { setGeoError("GPS not available."); return; }
     setGpsLoading(true);
     setGeoError(null);
     navigator.geolocation.getCurrentPosition(
@@ -111,44 +144,47 @@ export default function ProfileEdit() {
   }
 
   async function handleSave() {
-    if (!role) { toast.error("Please select a role."); return; }
     setSaving(true);
     try {
-      // Resolve address → coords if address was manually typed
       let finalCoords = coords;
-      if (address.trim() && !coords) {
-        finalCoords = await geocodeAddress(address.trim());
-        if (!finalCoords) {
-          toast.error("Couldn't find that address. Try being more specific.");
-          setSaving(false);
-          return;
-        }
-        setCoords(finalCoords);
-      }
-
-      // If address field was changed after GPS load, re-geocode
-      if (address.trim() && coords) {
+      if (address.trim()) {
         const recoded = await geocodeAddress(address.trim());
-        if (recoded) {
-          finalCoords = recoded;
-          setCoords(recoded);
-        }
+        if (recoded) { finalCoords = recoded; setCoords(recoded); }
       }
 
-      // Update Firebase Auth display name
       if (name.trim() && name.trim() !== user.displayName) {
         await updateProfile(user, { displayName: name.trim() });
       }
 
-      // Update Firestore profile
-      await updateDoc(doc(db, "users", user.uid), {
+      // Build update payload — never include role
+      const updates: Record<string, any> = {
         displayName: name.trim() || user.displayName,
-        role,
+        bio: bio.trim(),
         ...(finalCoords ? { location: finalCoords } : {}),
+      };
+      if (role === "driver") updates.vehicleType = vehicleType;
+      if (role === "organization") {
+        updates.businessName = businessName.trim();
+        updates.businessType = businessType;
+        updates.website = website.trim();
+      }
+
+      // Use the API endpoint (respects validation + never touches role)
+      await api("/api/v1/users/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          display_name: name.trim() || undefined,
+          bio: bio.trim() || undefined,
+          location: finalCoords ?? undefined,
+          vehicle_type: role === "driver" ? vehicleType : undefined,
+          business_name: role === "organization" ? businessName.trim() : undefined,
+          business_type: role === "organization" ? businessType : undefined,
+          website: role === "organization" && website.trim() ? website.trim() : undefined,
+        }),
       });
 
       toast.success("Profile saved!");
-      navigate(HOME[role]);
+      navigate(ROLE_HOME[role ?? "needy"]);
     } catch {
       toast.error("Failed to save. Please try again.");
     } finally {
@@ -156,7 +192,7 @@ export default function ProfileEdit() {
     }
   }
 
-  if (loadingProfile) {
+  if (loadingProfile || roleLoading) {
     return (
       <PageShell>
         <div className="flex h-40 items-center justify-center">
@@ -166,6 +202,8 @@ export default function ProfileEdit() {
     );
   }
 
+  const roleMeta = ROLE_LABELS[role ?? "needy"];
+
   return (
     <PageShell>
       <div className="space-y-6 pb-10">
@@ -174,94 +212,128 @@ export default function ProfileEdit() {
           Back
         </Button>
 
-        <div>
-          <h1 className="text-xl font-semibold">Edit profile</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Update your name, location, and role.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Edit profile</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Update your details.</p>
+          </div>
+          {roleMeta && (
+            <Badge variant="outline" className={`flex items-center gap-1 text-xs ${roleMeta.color}`}>
+              {roleMeta.icon}
+              {roleMeta.label}
+            </Badge>
+          )}
         </div>
 
         <Separator />
 
         {/* Name */}
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Display name</label>
+          <label className="text-sm font-medium">
+            {role === "organization" ? "Organization name" : "Display name"}
+          </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
+            placeholder={role === "organization" ? "Your organization's name" : "Your name"}
+            maxLength={100}
           />
         </div>
 
-        {/* Location */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Location</label>
-          <p className="text-xs text-muted-foreground">
-            Used to show you nearby posts and calculate distances.
-          </p>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        {/* Bio */}
+        {role !== "admin" && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Bio</label>
+            <Input
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="A short description about yourself"
+              maxLength={300}
+            />
+          </div>
+        )}
+
+        {/* Driver-specific */}
+        {role === "driver" && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Vehicle type</label>
+            <select
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {VEHICLE_TYPES.map((v) => (
+                <option key={v.value} value={v.value}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Organization-specific */}
+        {role === "organization" && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Organization type</label>
+              <select
+                value={businessType}
+                onChange={(e) => setBusinessType(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {BUSINESS_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Website <span className="text-muted-foreground font-normal">(optional)</span></label>
               <Input
-                value={address}
-                onChange={(e) => { setAddress(e.target.value); setCoords(null); }}
-                placeholder="Enter your address or city"
-                className="pl-8"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://yourorg.com"
+                maxLength={200}
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleUseGPS}
-              disabled={gpsLoading}
-              title="Use my current GPS location"
-            >
-              {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Navigation size={15} />}
-            </Button>
-          </div>
-          {coords && (
-            <p className="text-xs text-muted-foreground">
-              Coordinates: {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-            </p>
-          )}
-          {geoError && (
-            <Alert variant="destructive">
-              <AlertDescription>{geoError}</AlertDescription>
-            </Alert>
-          )}
-        </div>
+          </>
+        )}
 
-        <Separator />
+        {/* Location */}
+        {role !== "admin" && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Location</label>
+              <p className="text-xs text-muted-foreground">
+                Used to show nearby posts and calculate distances.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={address}
+                    onChange={(e) => { setAddress(e.target.value); setCoords(null); }}
+                    placeholder="Enter your address or city"
+                    className="pl-8"
+                  />
+                </div>
+                <Button type="button" variant="outline" size="icon" onClick={handleUseGPS} disabled={gpsLoading}>
+                  {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Navigation size={15} />}
+                </Button>
+              </div>
+              {coords && (
+                <p className="text-xs text-muted-foreground">
+                  {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+                </p>
+              )}
+              {geoError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{geoError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </>
+        )}
 
-        {/* Role */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium">Role</label>
-          <div className="grid grid-cols-1 gap-3">
-            {roleCards.map((c) => (
-              <Card
-                key={c.role}
-                className={cn(
-                  "cursor-pointer transition-colors hover:bg-accent",
-                  role === c.role && "border-primary ring-2 ring-primary/20"
-                )}
-                onClick={() => setRole(c.role)}
-              >
-                <CardContent className="flex items-center gap-4 p-4">
-                  <span className={role === c.role ? "text-primary" : "text-muted-foreground"}>
-                    {c.icon}
-                  </span>
-                  <div>
-                    <p className="font-semibold text-sm">{c.title}</p>
-                    <p className="text-xs text-muted-foreground">{c.desc}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        <Button className="w-full" onClick={handleSave} disabled={saving || !role}>
+        <Button className="w-full" onClick={handleSave} disabled={saving}>
           {saving && <Loader2 size={16} className="mr-2 animate-spin" />}
           Save changes
         </Button>

@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { LogOut, RefreshCw, UserCircle } from "lucide-react";
-import { auth, db } from "@/firebase";
+import { LogOut, UserCircle, ShieldCheck } from "lucide-react";
+import { auth } from "@/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,10 +14,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
+
+const ROLE_LABELS: Record<string, string> = {
+  helper: "Helper",
+  needy: "Needs help",
+  driver: "Driver",
+  organization: "Organization",
+  admin: "Admin",
+};
 
 export default function UserMenu() {
   const { user } = useAuth();
+  const { role } = useRole();
   const navigate = useNavigate();
 
   if (!user) return null;
@@ -24,24 +33,6 @@ export default function UserMenu() {
   const initials = user.displayName
     ? user.displayName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";
-
-  async function handleSwitchRole() {
-    try {
-      const userRef = doc(db, "users", user!.uid);
-      const snap = await getDoc(userRef);
-      if (!snap.exists()) return;
-      const cycle: Record<string, string> = { needy: "helper", helper: "driver", driver: "needy" };
-      const labels: Record<string, string> = { needy: "Needy", helper: "Helper", driver: "Driver" };
-      const current = snap.data().role as string;
-      const next = cycle[current] ?? "needy";
-      await updateDoc(userRef, { role: next });
-      toast.success(`Switched to ${labels[next]} mode`);
-      const dest = next === "helper" ? "/helper" : next === "driver" ? "/driver" : "/needy";
-      navigate(dest);
-    } catch {
-      toast.error("Couldn't switch role. Try again.");
-    }
-  }
 
   async function handleSignOut() {
     await signOut(auth);
@@ -63,13 +54,18 @@ export default function UserMenu() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
+        <DropdownMenuLabel className="flex flex-col gap-1">
           <span className="text-sm font-semibold leading-tight">
             {user.displayName ?? "User"}
           </span>
           <span className="text-xs font-normal text-muted-foreground truncate">
             {user.email}
           </span>
+          {role && (
+            <Badge variant="outline" className="w-fit text-xs font-normal">
+              {ROLE_LABELS[role] ?? role}
+            </Badge>
+          )}
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />
@@ -79,10 +75,12 @@ export default function UserMenu() {
           Edit profile
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={handleSwitchRole} className="gap-2 cursor-pointer">
-          <RefreshCw size={15} />
-          Switch role
-        </DropdownMenuItem>
+        {role === "admin" && (
+          <DropdownMenuItem onClick={() => navigate("/admin")} className="gap-2 cursor-pointer text-amber-600 focus:text-amber-600">
+            <ShieldCheck size={15} />
+            Admin panel
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

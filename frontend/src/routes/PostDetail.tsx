@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Flag, UserX, MoreVertical } from "lucide-react";
 import { doc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "@/firebase";
-import { api } from "@/api";
+import { api, blockUser } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,10 +16,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn, timeAgo } from "@/lib/utils";
 import { usePost } from "@/hooks/usePosts";
 import PageShell from "@/components/PageShell";
+import ReportDialog from "@/components/ReportDialog";
 
 type ItemData = {
   name: string;
@@ -39,8 +46,11 @@ export default function PostDetail() {
   const { post, loading } = usePost(id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const [selectedClaims, setSelectedClaims] = useState<Record<number, number>>({}); // index -> qty
 
   const uid = auth.currentUser?.uid;
@@ -96,6 +106,21 @@ export default function PostDetail() {
     }
   }
 
+  async function handleBlock() {
+    if (!post) return;
+    setBlocking(true);
+    try {
+      await blockUser(post.authorId);
+      toast.success("User blocked. You won't see their posts.");
+      setBlockDialogOpen(false);
+      navigate(-1);
+    } catch {
+      toast.error("Failed to block user.");
+    } finally {
+      setBlocking(false);
+    }
+  }
+
   async function handleDelete() {
     if (!post) return;
     setDeleting(true);
@@ -141,10 +166,37 @@ export default function PostDetail() {
   return (
     <PageShell>
       <div className="space-y-4 pb-28">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1 pl-0">
-          <ArrowLeft size={16} />
-          Back
-        </Button>
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1 pl-0">
+            <ArrowLeft size={16} />
+            Back
+          </Button>
+          {!isAuthor && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreVertical size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setReportOpen(true)}
+                >
+                  <Flag size={14} className="mr-2" />
+                  Report post
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setBlockDialogOpen(true)}
+                >
+                  <UserX size={14} className="mr-2" />
+                  Block user
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
 
         {post.photoURL ? (
           <img
@@ -342,6 +394,35 @@ export default function PostDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Block user dialog */}
+      <Dialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block this user?</DialogTitle>
+            <DialogDescription>
+              Their posts won't appear in your feed. They won't be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlockDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBlock} disabled={blocking}>
+              {blocking ? "Blocking…" : "Block user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report dialog */}
+      {post && (
+        <ReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          targetType="post"
+          targetId={post.postId}
+          targetLabel="this post"
+        />
+      )}
     </PageShell>
   );
 }

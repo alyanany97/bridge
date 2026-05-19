@@ -1,13 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Clock, X } from "lucide-react";
+import { MapPin, Clock, X, MoreVertical, Flag, Building2 } from "lucide-react";
 import { deleteDoc, doc } from "firebase/firestore";
-import { db } from "@/firebase";
+import { db, auth } from "@/firebase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { type Post } from "@/hooks/usePosts";
 import { cn, distanceKm, timeAgo } from "@/lib/utils";
 import { toast } from "sonner";
+import ReportDialog from "@/components/ReportDialog";
 
 interface Props {
   post: Post;
@@ -46,6 +53,9 @@ const statusLabels: Record<string, string> = {
 export default function PostCard({ post, userLocation, showStatus, allowDelete }: Props) {
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const uid = auth.currentUser?.uid;
+  const isOwn = uid === post.authorId;
 
   const dist =
     userLocation && post.location
@@ -77,16 +87,48 @@ export default function PostCard({ post, userLocation, showStatus, allowDelete }
       className="relative cursor-pointer transition-colors hover:bg-accent"
       onClick={() => navigate(`/post/${post.postId}`)}
     >
-      {canDelete && (
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="absolute right-2 top-2 z-10 rounded-full p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          aria-label="Delete post"
-        >
-          <X size={14} />
-        </button>
-      )}
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            aria-label="Delete post"
+          >
+            <X size={14} />
+          </button>
+        )}
+        {!isOwn && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent"
+                aria-label="More options"
+              >
+                <MoreVertical size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setReportOpen(true)}
+              >
+                <Flag size={14} className="mr-2" />
+                Report post
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        targetType="post"
+        targetId={post.postId}
+        targetLabel="this post"
+      />
 
       <CardContent className="flex gap-3 p-4">
         {post.photoURL ? (
@@ -124,6 +166,12 @@ export default function PostCard({ post, userLocation, showStatus, allowDelete }
             <Badge variant="outline" className={cn("text-xs capitalize", categoryColors[post.category])}>
               {post.category}
             </Badge>
+            {(post as any).authorRole === "organization" && (
+              <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-1">
+                <Building2 size={9} />
+                Org
+              </Badge>
+            )}
             {showStatus && (
               <Badge variant="outline" className={cn("text-xs", statusColors[post.status])}>
                 {statusLabels[post.status] ?? post.status}

@@ -79,6 +79,7 @@ def list_posts(
     lat: float | None = None,
     lng: float | None = None,
     radius_km: float = 20.0,
+    blocked_uids: set[str] | None = None,
 ) -> list[dict]:
     now = datetime.now(timezone.utc)
 
@@ -111,6 +112,8 @@ def list_posts(
             expires = d.get("expiresAt")
             if expires and _to_utc(expires) < now:
                 continue
+            if blocked_uids and d.get("authorId") in blocked_uids:
+                continue
             result.append(d)
         result.sort(key=lambda d: _ts(d.get("createdAt")), reverse=True)
         return result[:limit]
@@ -134,6 +137,8 @@ def list_posts(
         data = d.to_dict()
         expires = data.get("expiresAt")
         if expires and _to_utc(expires) < now:
+            continue
+        if blocked_uids and data.get("authorId") in blocked_uids:
             continue
         result.append(data)
     return result
@@ -223,6 +228,114 @@ def expire_old_posts(batch_size: int = 200) -> int:
     if docs:
         batch.commit()
     return len(docs)
+
+
+# ── Reports ───────────────────────────────────────────────────────────────
+
+def create_report(
+    reporter_uid: str,
+    target_type: str,
+    target_id: str,
+    reason: str,
+    details: str | None,
+) -> str:
+    now = datetime.now(timezone.utc)
+    ref = db().collection("reports").document()
+    ref.set({
+        "reportId": ref.id,
+        "reporterUid": reporter_uid,
+        "targetType": target_type,
+        "targetId": target_id,
+        "reason": reason,
+        "details": details or "",
+        "status": "pending",
+        "createdAt": now,
+    })
+    return ref.id
+
+
+# ── Blocks ─────────────────────────────────────────────────────────────────
+
+def block_user(blocker_uid: str, blocked_uid: str) -> None:
+    now = datetime.now(timezone.utc)
+    db().collection("users").document(blocker_uid) \
+        .collection("blocks").document(blocked_uid) \
+        .set({"blockedAt": now, "blockedUid": blocked_uid})
+
+
+def unblock_user(blocker_uid: str, blocked_uid: str) -> None:
+    db().collection("users").document(blocker_uid) \
+        .collection("blocks").document(blocked_uid) \
+        .delete()
+
+
+def get_blocked_uids(uid: str) -> set[str]:
+    docs = db().collection("users").document(uid).collection("blocks").stream()
+    return {d.id for d in docs}
+
+
+def is_blocked(blocker_uid: str, blocked_uid: str) -> bool:
+    doc = db().collection("users").document(blocker_uid) \
+        .collection("blocks").document(blocked_uid).get()
+    return doc.exists
+
+
+# ── Admin ─────────────────────────────────────────────────────────────────
+
+def list_reports(status: str = "pending", limit: int = 50) -> list[dict]:
+    docs = (
+        db()
+        .collection("reports")
+        .where("status", "==", status)
+        .order_by("createdAt", direction="DESCENDING")
+        .limit(limit)
+        .stream()
+    )
+    return [_serialize(d.to_dict()) for d in docs]
+
+
+def resolve_report(report_id: str, action: str, note: str | None) -> None:
+    db().collection("reports").document(report_id).update({
+        "status": action,
+        "adminNote": note or "",
+        "resolvedAt": datetime.now(timezone.utc),
+    })
+
+
+def list_users(search: str = "", limit: int = 50) -> list[dict]:
+    col = db().collection("users")
+    if search:
+        end = search[:-1] + chr(ord(search[-1]) + 1)
+        docs = (
+            col.where("email", ">=", search)
+               .where("email", "<", end)
+               .limit(limit)
+               .stream()
+        )
+    else:
+        docs = col.order_by("role").limit(limit).stream()
+    return [_serialize(d.to_dict()) for d in docs]
+
+
+def suspend_user(uid: str) -> None:
+    db().collection("users").document(uid).update({"suspended": True})
+
+
+def unsuspend_user(uid: str) -> None:
+    db().collection("users").document(uid).update({"suspended": False})
+
+
+def _serialize(data: dict) -> dict:
+    """Convert non-JSON-serializable Firestore types for API responses."""
+    result = {}
+    for k, v in data.items():
+        if isinstance(v, datetime):
+            result[k] = v.isoformat()
+        elif hasattr(v, "seconds"):
+            result[k] = datetime.fromtimestamp(v.seconds, tz=timezone.utc).isoformat()
+        else:
+            result[k] = v
+    return result
 
 
 # ── Private helpers ────────────────────────────────────────────────────────
