@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from deps import get_current_user, require_role
 from rate_limiter import limiter
-from models import SetRoleBody, RegisterFcmTokenBody, RemoveFcmTokenBody
+from models import SetRoleBody, UpdateProfileBody, RegisterFcmTokenBody, RemoveFcmTokenBody
 from services import firestore_repo
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -25,6 +25,8 @@ async def set_role(
     claim (embedded in the JWT) so no Firestore read is needed on every request.
     Once set, the role cannot be changed by the client.
     """
+    if body.role == "admin":
+        raise HTTPException(status_code=403, detail="Admin role cannot be set via API")
     if user.get("role") is not None:
         raise HTTPException(status_code=400, detail="Role already set")
 
@@ -43,9 +45,13 @@ async def set_role(
         "ratingCount": 0,
         "ratingTotal": 0,
         "ratingAvg": None,
+        "suspended": False,
     }
     if body.location:
         user_data["location"] = body.location.model_dump()
+    if body.role == "organization":
+        user_data["businessName"] = body.business_name or ""
+        user_data["businessType"] = body.business_type or "other"
 
     firestore_repo.upsert_user(uid, user_data)
 
@@ -60,6 +66,33 @@ async def get_me(
 ):
     profile = firestore_repo.get_user(user["uid"]) or {}
     return {**profile, "uid": user["uid"], "email": user["email"]}
+
+
+@router.put("/profile")
+@limiter.limit("10/minute")
+async def update_profile(
+    request: Request,
+    body: UpdateProfileBody,
+    user: dict = Depends(get_current_user),
+):
+    updates: dict = {}
+    if body.display_name is not None:
+        updates["displayName"] = body.display_name
+    if body.bio is not None:
+        updates["bio"] = body.bio
+    if body.location is not None:
+        updates["location"] = body.location.model_dump()
+    if body.vehicle_type is not None:
+        updates["vehicleType"] = body.vehicle_type
+    if body.business_name is not None:
+        updates["businessName"] = body.business_name
+    if body.business_type is not None:
+        updates["businessType"] = body.business_type
+    if body.website is not None:
+        updates["website"] = body.website
+    if updates:
+        firestore_repo.upsert_user(user["uid"], updates)
+    return {"ok": True}
 
 
 @router.post("/fcm-token")

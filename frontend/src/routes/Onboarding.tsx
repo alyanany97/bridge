@@ -1,25 +1,38 @@
 import { useState } from "react";
-import { HandHeart, Gift, Truck, Loader2 } from "lucide-react";
+import { HandHeart, Gift, Truck, Building2, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "@/firebase";
 import { api, refreshToken } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
 const DEMO_CENTER = { lat: 43.5448, lng: -80.2482 }; // Guelph, ON
 
-type Role = "needy" | "helper" | "driver";
+type Role = "needy" | "helper" | "driver" | "organization";
 
 const HOME: Record<Role, string> = {
   needy: "/needy",
   helper: "/helper",
   driver: "/driver",
+  organization: "/org",
 };
+
+const BUSINESS_TYPES = [
+  { value: "restaurant", label: "Restaurant / Café" },
+  { value: "grocery", label: "Grocery / Food store" },
+  { value: "retail", label: "Retail / Clothing" },
+  { value: "office", label: "Office / Corporate" },
+  { value: "food_bank", label: "Food bank / Nonprofit" },
+  { value: "other", label: "Other" },
+];
 
 export default function Onboarding() {
   const [role, setRole] = useState<Role | null>(null);
+  const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState("other");
   const [loading, setLoading] = useState(false);
   const [demoLocation, setDemoLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +40,10 @@ export default function Onboarding() {
 
   async function handleContinue() {
     if (!role) return;
+    if (role === "organization" && !businessName.trim()) {
+      setError("Please enter your organization's name.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -46,21 +63,20 @@ export default function Onboarding() {
 
       const user = auth.currentUser!;
 
-      // Send role to backend — this sets the Firebase custom claim AND writes the user doc.
-      // Custom claims live in the JWT, so no Firestore read is needed on every API call.
       await api("/api/v1/users/role", {
         method: "POST",
         body: JSON.stringify({
           role,
-          display_name: user.displayName,
+          display_name: role === "organization" ? businessName.trim() : user.displayName,
           location,
+          ...(role === "organization" && {
+            business_name: businessName.trim(),
+            business_type: businessType,
+          }),
         }),
       });
 
-      // Force-refresh the token so the new role claim is picked up immediately.
-      // Without this the current token would be stale until natural expiry (~1 hour).
       await refreshToken();
-
       navigate(HOME[role]);
     } catch (err) {
       setError("Something went wrong. Please try again.");
@@ -81,13 +97,19 @@ export default function Onboarding() {
       role: "helper",
       icon: <Gift size={32} />,
       title: "I want to help",
-      desc: "Share food or clothing nearby",
+      desc: "Share surplus food or clothing",
     },
     {
       role: "driver",
       icon: <Truck size={32} />,
       title: "I'm a driver",
-      desc: "Pick up and deliver items to people in need",
+      desc: "Deliver items to people in need",
+    },
+    {
+      role: "organization",
+      icon: <Building2 size={32} />,
+      title: "We're an organization",
+      desc: "Restaurant, office, food bank, or retailer with surplus",
     },
   ];
 
@@ -121,6 +143,32 @@ export default function Onboarding() {
             </Card>
           ))}
         </div>
+
+        {role === "organization" && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Organization name</label>
+              <Input
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="e.g. Green Leaf Restaurant"
+                maxLength={200}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Organization type</label>
+              <select
+                value={businessType}
+                onChange={(e) => setBusinessType(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {BUSINESS_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {demoLocation && (
           <Alert>

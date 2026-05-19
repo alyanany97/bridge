@@ -20,8 +20,13 @@ export default function SignIn() {
       const userDoc = await getDoc(doc(db, "users", result.user.uid));
       if (userDoc.exists()) {
         const role = userDoc.data().role as string;
-        const dest = role === "helper" ? "/helper" : role === "driver" ? "/driver" : "/needy";
-        navigate(dest);
+        const destinations: Record<string, string> = {
+          helper: "/helper",
+          driver: "/driver",
+          organization: "/org",
+          admin: "/admin",
+        };
+        navigate(destinations[role] ?? "/needy");
       } else {
         navigate("/onboarding");
       }

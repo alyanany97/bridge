@@ -27,8 +27,10 @@ async def get_current_user(
 
 
 def require_role(*roles: str):
-    """Raises 403 unless the user's JWT role claim is in `roles`."""
+    """Raises 403 unless the user's JWT role claim is in `roles`. Admin always passes."""
     async def _check(user: dict = Depends(get_current_user)) -> dict:
+        if user.get("role") == "admin":
+            return user
         if user.get("role") not in roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user

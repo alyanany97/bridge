@@ -19,10 +19,11 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 async def create_post(
     request: Request,
     body: CreatePostBody,
-    user: dict = Depends(require_role("helper", "needy")),
+    user: dict = Depends(require_role("helper", "needy", "organization")),
 ):
     data = body.model_dump()
     data["authorId"] = user["uid"]
+    data["authorRole"] = user["role"]
     data["matchedPostId"] = None
     return firestore_repo.create_post(data)
 

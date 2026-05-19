@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Clock, X, MoreVertical, Flag } from "lucide-react";
+import { MapPin, Clock, X, MoreVertical, Flag, Building2 } from "lucide-react";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db, auth } from "@/firebase";
 import { Card, CardContent } from "@/components/ui/card";
@@ -166,6 +166,12 @@ export default function PostCard({ post, userLocation, showStatus, allowDelete }
             <Badge variant="outline" className={cn("text-xs capitalize", categoryColors[post.category])}>
               {post.category}
             </Badge>
+            {(post as any).authorRole === "organization" && (
+              <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-1">
+                <Building2 size={9} />
+                Org
+              </Badge>
+            )}
             {showStatus && (
               <Badge variant="outline" className={cn("text-xs", statusColors[post.status])}>
                 {statusLabels[post.status] ?? post.status}

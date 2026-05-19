@@ -77,9 +77,47 @@ class ParsePhotoBody(BaseModel):
 
 
 class SetRoleBody(BaseModel):
-    role: Literal["helper", "needy", "driver"]
+    role: Literal["helper", "needy", "driver", "organization"]
     display_name: Optional[str] = Field(None, max_length=100)
     location: Optional[GeoPoint] = None
+    # Organization-specific (required when role == "organization")
+    business_name: Optional[str] = Field(None, max_length=200)
+    business_type: Optional[Literal[
+        "restaurant", "grocery", "retail", "office", "food_bank", "other"
+    ]] = None
+
+    @field_validator("business_name")
+    @classmethod
+    def org_requires_business_name(cls, v, info):
+        if info.data.get("role") == "organization" and not v:
+            raise ValueError("business_name is required for organizations")
+        return v
+
+
+class UpdateProfileBody(BaseModel):
+    display_name: Optional[str] = Field(None, max_length=100)
+    bio: Optional[str] = Field(None, max_length=300)
+    location: Optional[GeoPoint] = None
+    # Driver-specific
+    vehicle_type: Optional[Literal["walking", "bike", "car", "van"]] = None
+    # Organization-specific
+    business_name: Optional[str] = Field(None, max_length=200)
+    business_type: Optional[Literal[
+        "restaurant", "grocery", "retail", "office", "food_bank", "other"
+    ]] = None
+    website: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("website")
+    @classmethod
+    def website_must_be_https(cls, v: Optional[str]) -> Optional[str]:
+        if v and not (v.startswith("https://") or v.startswith("http://")):
+            raise ValueError("website must be a valid URL")
+        return v
+
+
+class ResolveReportBody(BaseModel):
+    action: Literal["resolve", "dismiss"]
+    note: Optional[str] = Field(None, max_length=500)
 
 
 class RegisterFcmTokenBody(BaseModel):

@@ -280,6 +280,64 @@ def is_blocked(blocker_uid: str, blocked_uid: str) -> bool:
     return doc.exists
 
 
+# ── Admin ─────────────────────────────────────────────────────────────────
+
+def list_reports(status: str = "pending", limit: int = 50) -> list[dict]:
+    docs = (
+        db()
+        .collection("reports")
+        .where("status", "==", status)
+        .order_by("createdAt", direction="DESCENDING")
+        .limit(limit)
+        .stream()
+    )
+    return [_serialize(d.to_dict()) for d in docs]
+
+
+def resolve_report(report_id: str, action: str, note: str | None) -> None:
+    db().collection("reports").document(report_id).update({
+        "status": action,
+        "adminNote": note or "",
+        "resolvedAt": datetime.now(timezone.utc),
+    })
+
+
+def list_users(search: str = "", limit: int = 50) -> list[dict]:
+    col = db().collection("users")
+    if search:
+        end = search[:-1] + chr(ord(search[-1]) + 1)
+        docs = (
+            col.where("email", ">=", search)
+               .where("email", "<", end)
+               .limit(limit)
+               .stream()
+        )
+    else:
+        docs = col.order_by("role").limit(limit).stream()
+    return [_serialize(d.to_dict()) for d in docs]
+
+
+def suspend_user(uid: str) -> None:
+    db().collection("users").document(uid).update({"suspended": True})
+
+
+def unsuspend_user(uid: str) -> None:
+    db().collection("users").document(uid).update({"suspended": False})
+
+
+def _serialize(data: dict) -> dict:
+    """Convert non-JSON-serializable Firestore types for API responses."""
+    result = {}
+    for k, v in data.items():
+        if isinstance(v, datetime):
+            result[k] = v.isoformat()
+        elif hasattr(v, "seconds"):
+            result[k] = datetime.fromtimestamp(v.seconds, tz=timezone.utc).isoformat()
+        else:
+            result[k] = v
+    return result
+
+
 # ── Private helpers ────────────────────────────────────────────────────────
 
 def _geo_precision(radius_km: float) -> int:

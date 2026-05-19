@@ -10,7 +10,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from rate_limiter import limiter
-from routers import posts, matches, ai, users, reports
+from routers import posts, matches, ai, users, reports, admin
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
@@ -41,6 +41,7 @@ app.include_router(posts.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
