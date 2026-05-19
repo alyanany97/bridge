@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Bridge",
+    "slug": "bridge",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "bridge",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bridgeapp.help",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Bridge uses your location to show nearby help offers and needs.",
+        "NSCameraUsageDescription": "Bridge uses your camera to take photos of items you're offering.",
+        "NSPhotoLibraryUsageDescription": "Bridge uses your photo library to select photos of items.",
+        "NSUserNotificationsUsageDescription": "Bridge sends notifications when someone responds to your post."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.bridgeapp.help"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Bridge uses your location to show nearby help offers and needs."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bridge uses your photo library to select photos of items.",
+          "cameraPermission": "Bridge uses your camera to take photos of items."
+        }
+      ]
+    ]
+  }
+}
