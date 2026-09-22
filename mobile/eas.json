@@ -1,0 +1,54 @@
+{
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview2": {
+      "android": {
+        "buildType": "aab"
+      }
+    },
+    "preview3": {
+      "ios": "internal"
+    },
+    "production": {
+      "ios": {
+        "image": "latest",
+        "resourceClass": "m-medium",
+        "scheme": "Release",
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "image": "latest",
+        "buildType": "aab"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "YOUR_APP_ID_HERE",
+        "appleId": "YOUR_APPLE_ID_HERE",
+        "ascAppIdentifier": "com.bridge.app",
+        "appleTeamId": "YOUR_TEAM_ID_HERE"
+      },
+      "android": {
+        "serviceAccount": "./google-play-key.json",
+        "track": "production"
+      }
+    }
+  },
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "env": {
+    "preview": {
+      "channel": "preview"
+    },
+    "production": {
+      "channel": "production"
+    }
+  }
+}
